@@ -107,7 +107,7 @@ int Id = 1001;
 
 void DeleteUser(UserInfo *pUser,int Virgin)
 {
-   D2PRINTF(("Deleting user \"%s\".\n",pUser->Callsign));
+//   D2PRINTF(("Deleting user \"%s\".\n",pUser->Callsign));  //LWD130217 comment out
    if(!Virgin && avl_find(UserIPAdrTree,pUser) != NULL) {
       avl_delete(UserIPAdrTree,pUser);
    }

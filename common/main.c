@@ -953,12 +953,13 @@ static char *MonthNames[] = {
 /* 
 We have a bunch of possible logfile formats selected by the configuration
 file variable LogFileRolloverType.
-   0 - logging disabled.
-   1 - Never: single logfile, filename = tbd.log
-   2 - Never: new logfile opened everyday, filename = tbdmmddyy.log
-   3 - Daily: new logfile opened everyday, filename = tbd.log, tbd.bak
-   4 - Weekly: new logfile opened everyday, filename = mon.log, tues.log, ...
-*/    
+  0 - logging disabled.
+  1 - Never: single logfile, filename = tbd.log
+  2 - Never: new logfile opened everyday, filename = tbdyymmdd.log (LWD)
+  3 - Daily: new logfile opened everyday, filename = tbd.log, tbd.bak
+  4 - Weekly: new logfile opened everyday, filename = mon.log, tues.log, ...
+	5 - Monthly: new logfile opened every Month, filename = tbdyymm.log (LWD)
+ */    
 void vLog(const char *fmt,va_list args)
 {
    int WriteLen;
@@ -988,32 +989,32 @@ void vLog(const char *fmt,va_list args)
       snprintf(Temp,sizeof(Temp),"%s.log",AppName == NULL ? "tbd" : AppName);
 
       switch(LogFileRolloverType) {
-         case 2:  // daily log
-            snprintf(Temp,sizeof(Temp),"%s%02d%02d%02d.log",AppName,
-                     tm->tm_mon+1,tm->tm_mday,tm->tm_year % 100);
-            break;
+        case 2:  // daily log
+					snprintf(Temp,sizeof(Temp),"%s%02d%02d%02d.log",AppName,tm->tm_year % 100,
+            tm->tm_mon+1,tm->tm_mday);	//LWD 130216
+          break;
 
-         case 3:  // daily log
-            if(LastLogDay != -1 && tm->tm_mday != LastLogDay) {
-            // A new day is born, rename the old log to .bak and open a new log
-               snprintf(Temp1,sizeof(Temp1),"%s.bak",AppName);
-               unlink(Temp1);
-               rename(Temp,Temp1);
-            }
-            break;
+        case 3:  // daily log
+					if(LastLogDay != -1 && tm->tm_mday != LastLogDay) {
+          // A new day is born, rename the old log to .bak and open a new log
+						snprintf(Temp1,sizeof(Temp1),"%s.bak",AppName);
+            unlink(Temp1);
+            rename(Temp,Temp1);
+          }
+          break;
 
-         case 4:  // weekly
-            if(LastLogDay != -1 && tm->tm_mday != LastLogDay) {
-            // delete last weeks log
-               unlink(LogNames[tm->tm_wday]);
-            }
-            strcpy(Temp,LogNames[tm->tm_wday]);
-            break;
+        case 4:  // weekly
+					if(LastLogDay != -1 && tm->tm_mday != LastLogDay) {
+          // delete last weeks log
+             unlink(LogNames[tm->tm_wday]);
+          }
+          strcpy(Temp,LogNames[tm->tm_wday]);
+          break;
 
-			case 5:	// Monthly
-            snprintf(Temp,sizeof(Temp),"%s%02d%02d.log",AppName,
-                     tm->tm_mon+1,tm->tm_year % 100);
-				break;
+				case 5:	// Monthly
+          snprintf(Temp,sizeof(Temp),"%s%02d%02d.log",AppName,tm->tm_year % 100,
+            tm->tm_mon+1);	//LWD 130216
+					break;
       }
 
       LastLogDay = tm->tm_mday;

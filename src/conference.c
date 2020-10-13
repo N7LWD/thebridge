@@ -854,7 +854,7 @@ int EchoLinkIPCompareFailures;
 int EchoAuthenticationFailures;
 int AuthenticationFailures;
 
-ConfClient *StationList;
+ConfClient *StationList = NULL;	//LWD130118
 
 int BadRTCPPacketCount = 0;
 int bLurkDisabled = FALSE;
@@ -932,6 +932,7 @@ int ConfCompare(const void *avl_a,const void *avl_b,void *avl_param);
 int CClientCompare(const void *avl_a,const void *avl_b,void *avl_param);
 ConfClient *CreateNewConfClient(void);
 void RemoveFromStationList(ConfClient *pCC);
+void MoveTopToBottom (void);				//LWD130118
 void DeleteCClient(ConfClient *pCC);
 char CheckRTCP(ConfServer *pCS);
 int GetCall(ConfServer *pCS,ConfClient *pCC,rtcp_t *p,int len);
@@ -1672,6 +1673,7 @@ void RTP_Data(ClientInfo *p,ConfServer *pCS,ConfClient *pLookup)
                pCC->bLurking = FALSE;
 
             // Move him to the top of the station list
+               MoveTopToBottom();			//LWD130118
                RemoveFromStationList(pCC);
                pCC->Link = StationList;
                StationList = pCC;
@@ -2058,14 +2060,28 @@ void IncrementClientCount(ConfServer *pCS,ConfClient *pCC)
 }
 
 void AddClient2Conf(ConfServer *pCS,ConfClient *pCC)
-{
+{  ConfClient *pCC_Bot = StationList;			//LWD130118
    gProtoData[pCC->Proto].Clients++;
    pCC->LoginTime = TimeNow.tv_sec;
    avl_insert(pCS->ConfTree,pCC);
    pCS->Users++;
+
+// put our new guy on the bottom of the station list, LWD130118
+   if ( StationList != NULL )			//LWD130118
+   {  while(pCC_Bot->Link != NULL)	//LWD130118
+      {  pCC_Bot = pCC_Bot->Link;	//LWD130118
+      }										//LWD130118
+      pCC_Bot->Link = pCC;				//LWD130118
+      pCC->Link = NULL;					//LWD130118
+   }											//LWD130118
+   else										//LWD130118
+      StationList = pCC;				//LWD130118
+
 // put our new guy on the top of the station list
-   pCC->Link = StationList;
-   StationList = pCC;
+//   pCC->Link = StationList;			// Top of List
+//   StationList = pCC;					// Top of List
+
+
    if(pCC->bConnected) {
       IncrementClientCount(pCS,pCC);
    }
@@ -2392,19 +2408,19 @@ void SetTimeoutRTCP(ClientInfo *p)
    int Timeout = 0x7fffffff;
 
    if(pCS->ConfTree->avl_count > 0) {
-      Timeout = MIN(Timeout,pCS->TimeNextSDES);
+      Timeout = (int)MIN(Timeout,pCS->TimeNextSDES);		//LWD130118 Recasted
    }
    
    if(NextLoginTime != 0) {
-      Timeout = MIN(Timeout,NextLoginTime);
+      Timeout = (int)MIN(Timeout,NextLoginTime);			//LWD130118 Recasted
    }
 
    if(NextStationListTime != 0) {
-      Timeout = MIN(Timeout,NextStationListTime);
+      Timeout = (int)MIN(Timeout,NextStationListTime);	//LWD130118 Recasted
    }
 
    if(NextAVRSTime != 0) {
-      Timeout = MIN(Timeout,NextAVRSTime);
+      Timeout = (int)MIN(Timeout,NextAVRSTime);				//LWD130118 Recasted
    }
 
    if(Timeout != 0x7fffffff) {
@@ -2820,6 +2836,7 @@ ConfClient *CreateNewConfClient()
       memset(pCC,0,sizeof(ConfClient));
       pCC->SN = ++ClientConnects;
       pCC->bInConf = TRUE;
+      pCC->Link = NULL;					//LWD130118
    }
    else {
       LOG_ERROR(("CreateNewConfClient(): malloc failed.\n"));
@@ -2849,6 +2866,20 @@ void RemoveFromStationList(ConfClient *pCC)
                  inet_ntoa(pCC->HisAdr.i.sin_addr)));
    }
 }
+
+void MoveTopToBottom (void)				//LWD130118
+{  ConfClient *pCC_Top = StationList;	//LWD130118
+   ConfClient *pCC_Bot = StationList;	//LWD130118
+   if (pCC_Top->Link != NULL) 			//LWD130118
+   {  StationList = pCC_Top->Link; 		//LWD130118
+      pCC_Bot = StationList; 				//LWD130118
+      while(pCC_Bot->Link != NULL)	 	//LWD130118
+      {  pCC_Bot = pCC_Bot->Link;		//LWD130118 
+      } 											//LWD130118
+      pCC_Bot->Link = pCC_Top; 			//LWD130118
+      pCC_Top->Link = NULL; 				//LWD130118
+   } 												//LWD130118
+}													//LWD130118
 
 void FileCleanup(ConfClient *pCC)
 {
@@ -3347,6 +3378,7 @@ void SendStationList(ConfServer *pCS)
    }
    else {
       BufPrintf(p,"CONF %s%s",ConferenceID,GetUserCountString());
+//      BufPrintf(p,"CONFERENCE NODE: %s%s",ConferenceID,GetUserCountString());  //LWD130118
       if(SB_Enable && ClientTalking == NULL) {   
          BufPrintf(p," <SB>");
       }
@@ -3917,7 +3949,8 @@ void CmdAdmin(ClientInfo *p,ConfClient *pCC,char *Arg)
       pCC->bAdmin = TRUE;
       pCC->bSysop = TRUE;
       pCC->bMuted = FALSE;
-      BufPrintf(p,"Your wish is my command.\r");
+//      BufPrintf(p,"Your wish is my command.\r");
+      BufPrintf(p,"You are now Administrator.\r");	//LWD 130118
       LOG_NORM(("Admin %s logged in\n",pCC->Callsign));
    }
 }
@@ -3927,7 +3960,8 @@ void CmdSysop(ClientInfo *p,ConfClient *pCC,char *Arg)
    if(SysopPass != NULL && strcmp(SysopPass,Arg) == 0) {
       pCC->bSysop = TRUE;
       pCC->bMuted = FALSE;
-      BufPrintf(p,"By your command.\r");
+//      BufPrintf(p,"By your command.\r");
+      BufPrintf(p,"You are now SysOp.\r");			//LWD 130118
       LOG_NORM(("Sysop %s logged in\n",pCC->Callsign));
    }
 }
@@ -5814,7 +5848,7 @@ int SendAudioFromFile(ClientInfo *p,ClientFileIO *pFIO,int NumPackets)
          }
 
          if(pFIO->LastTimeStamp != 0) {
-            PlayBackPause = TimeStamp - pFIO->LastTimeStamp;
+            PlayBackPause = (int)TimeStamp - pFIO->LastTimeStamp;   //LWD130118 Recasted
             if(PlayBackPause > MaxPlayBackPause) {
                PlayBackPause = MaxPlayBackPause;
             }
@@ -6611,6 +6645,9 @@ void CmdBusy(ClientInfo *p,ConfClient *pCC,char *Arg)
    }
    if(bBusyStateChanged) {
       if(LoginInterval > 0) {
+         if(AvrsEnable) { // added qualifier for AVRS, LWD130118
+            NextAVRSTime = TimeNow.tv_sec;
+         }   // Force an AVRS update
          NextAVRSTime = TimeNow.tv_sec;   // Force an AVRS update
          NextLoginTime = TimeNow.tv_sec + LoginInterval;
          ServerRequest(SERV_REQ_LOGIN,0,NULL);
@@ -6806,7 +6843,7 @@ struct COMMAND_TABLE commandtable[] = {
       CMD_FLAG_ADMIN | CMD_FLAG_NOLIST},
 #endif
    { "test", "Record and playback test transmission", CmdLevelTest, 
-      CMD_FLAG_NEED_DISK | CMD_FLAG_NOSCRIPT},
+      CMD_FLAG_NEED_DISK | CMD_FLAG_NOSCRIPT | CMD_FLAG_NOLIST},	//LWD130118 added NOLIST until it works
    { "unmute", "restore a user to transceive mode", CmdUnMute, CMD_FLAG_SYSOP},
    { "users", "show user list", CmdUsers, CMD_FLAG_SYSOP},
 
@@ -6840,7 +6877,7 @@ void CmdHelp(ClientInfo *p,ConfClient *pCC,char *Arg)
             (!(pTbl->Flags & CMD_FLAG_NEED_DISK) || EnableDiskCommands) &&
             (!(pTbl->Flags & CMD_FLAG_LURK) || !bLurkDisabled))
          {
-            BufPrintf(p,".%s:\r   %s\r",pTbl->CmdString,pTbl->HelpString);
+            BufPrintf(p,".%s: %s\r",pTbl->CmdString,pTbl->HelpString);	//LWD130118 remove first \r
          }
          pTbl++;
       }
@@ -7833,8 +7870,12 @@ int AuthorizedClient(ClientInfo *p,ConfClient *pCC)
    if(pCC->Proto == PROTO_ILINK) {
    // Lookup EchoLink clients by callsign and check the IP address
       pACL = avl_find(ACL_Call_Tree,&ACL_Lookup);
-
-      if(pACL != NULL && !pACL->bAuthorized) {
+	// LWD: Ban all Links and Repeaters for this specific conference
+     if((strchr(pCC->Callsign,'-') != NULL) || 			//LWD130118 
+        (strchr(pCC->Callsign,'*') != NULL)) { 			//LWD130118
+         Authorized = 0;										//LWD130118
+      } 																//LWD130118
+      else if(pACL != NULL && !pACL->bAuthorized) {	//LWD130118
       // Banned client, ignore the turkey
       }
       else if((pACL1 = avl_find(ACL_IP_Tree,&ACL_Lookup)) != NULL) {
